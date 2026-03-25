@@ -102,6 +102,7 @@
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.5} }
   .alert-flash { position:fixed; inset:0; pointer-events:none; z-index:90; animation:flashRed 0.5s forwards; }
   @keyframes flashRed { 0%{background:rgba(239,68,68,0.3)} 100%{background:transparent} }
+  .wakelock-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; padding:2px 8px; background:rgba(34,197,94,0.1); color:var(--green); border-radius:6px; margin-left:8px; }
 </style>
 </head>
 <body>
@@ -124,6 +125,12 @@ let state = {
   editingThreshold:null, showModal:false, calibrating:false, calibTargetDb:70,
   calibSamples:[], calibProgress:0, triggeredIds:new Set(),
   barLevels: new Array(30).fill(0),
+  // History chart (10 min = 600 seconds)
+  historyLog: [],
+  currentSecondPeak: 0,
+  lastSecondTimestamp: 0,
+  // Wake Lock
+  wakeLock: null,
 };
 if(!state.thresholds.length){
   state.thresholds=[{id:1,db:70,tone:'beep',vibrate:true,enabled:true,name:'Warnung'},{id:2,db:85,tone:'alarm',vibrate:true,enabled:true,name:'Laut!'}];
@@ -131,6 +138,7 @@ if(!state.thresholds.length){
 }
 
 let audioCtx, analyser, micStream, animFrame, alarmOsc=null, alarmGain=null, cooldowns={};
+let keepaliveOsc=null, keepaliveGain=null;
 
 function saveThresholds(){localStorage.setItem('dbguard_thresholds',JSON.stringify(state.thresholds))}
 function saveCalibration(){localStorage.setItem('dbguard_calibOffset',state.calibrationOffset.toString());localStorage.setItem('dbguard_calibGain',state.calibrationGain.toString())}
@@ -147,20 +155,30 @@ async function startMonitoring(){
     const src=audioCtx.createMediaStreamSource(micStream);
     analyser=audioCtx.createAnalyser(); analyser.fftSize=2048; analyser.smoothingTimeConstant=0.3;
     src.connect(analyser);
+    // Vibration warm-up (user-gesture context)
+    if(navigator.vibrate){navigator.vibrate(200)}
+    // Silent oscillator keepalive (prevents AudioContext suspension in background)
+    startKeepalive();
+    // Screen Wake Lock
+    acquireWakeLock();
+    // Reset history
+    state.historyLog=[]; state.currentSecondPeak=0; state.lastSecondTimestamp=Date.now();
     state.monitoring=true; state.peakDb=0;
-    render(); // full render: swap start->stop button
+    render();
     measureLoop();
   }catch(e){alert('Mikrofon-Zugriff benötigt! Bitte Berechtigung erteilen.')}
 }
 
 function stopMonitoring(){
   state.monitoring=false;
+  stopKeepalive();
+  releaseWakeLock();
   if(micStream) micStream.getTracks().forEach(t=>t.stop());
   if(audioCtx&&audioCtx.state!=='closed') audioCtx.close();
   if(animFrame) cancelAnimationFrame(animFrame);
   stopAlarm();
   state.currentDb=0; state.barLevels.fill(0); state.triggeredIds.clear();
-  render(); // full render: swap stop->start button
+  render();
 }
 
 function measureLoop(){
@@ -177,8 +195,17 @@ function measureLoop(){
   state.currentDb=Math.round(db*10)/10;
   if(state.currentDb>state.peakDb) state.peakDb=state.currentDb;
   state.barLevels.shift(); state.barLevels.push(state.currentDb);
+  // History tracking: peak per second
+  if(state.currentDb>state.currentSecondPeak) state.currentSecondPeak=state.currentDb;
+  const now=Date.now();
+  if(now-state.lastSecondTimestamp>=1000){
+    state.historyLog.push(state.currentSecondPeak);
+    if(state.historyLog.length>600) state.historyLog.shift();
+    state.currentSecondPeak=0;
+    state.lastSecondTimestamp=now;
+  }
   checkThresholds();
-  updateMeter(); // <<< FAST UPDATE, no DOM rebuild!
+  updateMeter();
   animFrame=requestAnimationFrame(measureLoop);
 }
 
@@ -201,6 +228,19 @@ function updateMeter(){
   const st=document.getElementById('status-text');
   if(st) st.textContent=state.monitoring?(state.triggeredIds.size>0?'⚠️ Schwellenwert überschritten!':'Überwachung aktiv'):'Überwachung gestoppt';
   state.thresholds.forEach(t=>{const el=document.getElementById('mini-'+t.id);if(el){if(state.triggeredIds.has(t.id))el.classList.add('triggered');else el.classList.remove('triggered')}});
+  // Update history chart polyline
+  const poly=document.getElementById('history-line');
+  if(poly&&state.historyLog.length>1){
+    const len=state.historyLog.length;
+    const pts=state.historyLog.map((v,i)=>{
+      const x=(i/(600-1))*600;
+      const y=100-Math.min(v/120,1)*100;
+      return x.toFixed(1)+','+y.toFixed(1);
+    }).join(' ');
+    poly.setAttribute('points',pts);
+  }
+  const htl=document.getElementById('history-time-label');
+  if(htl){const secs=state.historyLog.length;const m=Math.floor(secs/60);const s=secs%60;htl.textContent=m+':'+(s<10?'0':'')+s+' / 10:00'}
   const cr=document.getElementById('calib-reading');if(cr)cr.textContent=db.toFixed(1)+' dB';
   const cp=document.getElementById('calib-progress-fill');if(cp)cp.style.width=state.calibProgress+'%';
   const cpct=document.getElementById('calib-pct');if(cpct)cpct.textContent='Messung läuft... '+Math.round(state.calibProgress)+'%';
@@ -213,7 +253,7 @@ function checkThresholds(){
   if(best){if(!cooldowns[best.id]||now-cooldowns[best.id]>2000){cooldowns[best.id]=now;triggerAlarm(best)}}else{stopAlarm()}
 }
 function triggerAlarm(t){
-  if(t.vibrate&&navigator.vibrate)navigator.vibrate([200,100,200]);
+  if(t.vibrate&&navigator.vibrate)navigator.vibrate([200,100,200,100,300]);
   playTone(t.tone);
   const f=document.createElement('div');f.className='alert-flash';document.body.appendChild(f);setTimeout(()=>f.remove(),500);
 }
@@ -232,6 +272,34 @@ function playPreview(id){
   else{o.type=t.type;o.frequency.setValueAtTime(t.freq,c.currentTime);o.connect(g);o.start();g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+0.5);o.stop(c.currentTime+0.5)}
 }
 function stopAlarm(){try{if(alarmOsc){alarmOsc.stop();alarmOsc.disconnect()}}catch(e){}try{if(alarmGain)alarmGain.disconnect()}catch(e){}alarmOsc=null;alarmGain=null}
+
+// ===== WAKE LOCK & BACKGROUND KEEPALIVE =====
+async function acquireWakeLock(){
+  try{
+    if('wakeLock' in navigator){state.wakeLock=await navigator.wakeLock.request('screen')}
+  }catch(e){}
+}
+function releaseWakeLock(){
+  if(state.wakeLock){try{state.wakeLock.release()}catch(e){}state.wakeLock=null}
+}
+function startKeepalive(){
+  if(!audioCtx)return;
+  keepaliveGain=audioCtx.createGain();keepaliveGain.gain.setValueAtTime(0,audioCtx.currentTime);keepaliveGain.connect(audioCtx.destination);
+  keepaliveOsc=audioCtx.createOscillator();keepaliveOsc.frequency.setValueAtTime(440,audioCtx.currentTime);keepaliveOsc.connect(keepaliveGain);keepaliveOsc.start();
+}
+function stopKeepalive(){
+  try{if(keepaliveOsc){keepaliveOsc.stop();keepaliveOsc.disconnect()}}catch(e){}
+  try{if(keepaliveGain)keepaliveGain.disconnect()}catch(e){}
+  keepaliveOsc=null;keepaliveGain=null;
+}
+document.addEventListener('visibilitychange',async()=>{
+  if(document.visibilityState==='visible'&&state.monitoring){
+    // Re-acquire wake lock (released on tab hide by browser)
+    if(!state.wakeLock||state.wakeLock.released) acquireWakeLock();
+    // Resume AudioContext if suspended
+    if(audioCtx&&audioCtx.state==='suspended'){try{await audioCtx.resume()}catch(e){}}
+  }
+});
 
 // ===== CALIBRATION =====
 async function startCalibration(){
@@ -264,13 +332,42 @@ function rMonitor(){
   const db=state.currentDb,pct=Math.min(db/120,1),C=2*Math.PI*90,off=C*(1-pct*0.75),col=dbColor(db);
   const bars=state.barLevels.map(v=>`<div class="meter-bar-segment" style="height:${Math.max(3,(v/120)*32)}px;background:${v>0?dbColor(v):'var(--surface2)'}"></div>`).join('');
   const minis=state.thresholds.filter(t=>t.enabled).map(t=>{const tn=TONES.find(x=>x.id===t.tone)||TONES[0];return`<div class="t-mini ${state.triggeredIds.has(t.id)?'triggered':''}" id="mini-${t.id}"><div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim)"><span>${tn.icon}</span> ${t.name||''}</div><span style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:${dbColor(t.db)}">${t.db} dB</span></div>`}).join('');
+  // Build history chart SVG
+  const histPts=state.historyLog.length>1?state.historyLog.map((v,i)=>{const x=(i/(600-1))*600;const y=100-Math.min(v/120,1)*100;return x.toFixed(1)+','+y.toFixed(1)}).join(' '):'';
+  const histSecs=state.historyLog.length;const histM=Math.floor(histSecs/60);const histS=histSecs%60;
+  const histTime=histM+':'+(histS<10?'0':'')+histS+' / 10:00';
+  // Threshold lines in chart
+  const threshLines=state.thresholds.filter(t=>t.enabled).map(t=>{const y=100-Math.min(t.db/120,1)*100;return`<line x1="0" y1="${y.toFixed(1)}" x2="600" y2="${y.toFixed(1)}" stroke="${dbHex(t.db)}" stroke-width="0.5" stroke-dasharray="4,3" opacity="0.5"/><text x="604" y="${(y+3).toFixed(1)}" fill="${dbHex(t.db)}" font-size="7" font-family="JetBrains Mono,monospace">${t.db}</text>`}).join('');
+
   return`<div class="meter-section">
     <div class="meter-ring-container"><svg class="meter-ring" viewBox="0 0 200 200"><circle class="meter-ring-bg" cx="100" cy="100" r="90" stroke-dasharray="${C}" stroke-dashoffset="${C*0.25}"/><circle class="meter-ring-fill" cx="100" cy="100" r="90" id="ring-fill" stroke="${col}" stroke-dasharray="${C}" stroke-dashoffset="${off}"/></svg>
     <div class="meter-value-container"><div class="meter-value" id="db-value" style="color:${col}">${state.monitoring?db.toFixed(1):'—'}</div><div class="meter-unit">dB</div><div class="meter-label" id="db-label">${state.monitoring?dbLabel(db):'Gestoppt'}</div></div></div>
     <div class="meter-bar-row" id="meter-bars">${bars}</div>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px;min-height:18px" id="peak-value">${state.monitoring?'Peak: '+state.peakDb.toFixed(1)+' dB':''}</div>
     <button class="main-btn ${state.monitoring?'stop':'start'}" onclick="${state.monitoring?'stopMonitoring()':'startMonitoring()'}">${state.monitoring?'⏹ Stoppen':'▶ Überwachung starten'}</button>
-  </div>${minis?'<div class="section-title">Aktive Schwellenwerte</div>'+minis:''}`;
+  </div>
+  ${state.monitoring||state.historyLog.length>0?`<div class="section-title">Lautstärkenverlauf (10 Min)</div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 10px 10px;margin-bottom:16px">
+    <svg viewBox="0 0 620 110" style="width:100%;height:auto;display:block;overflow:visible">
+      <defs><linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--accent)" stop-opacity="0.3"/><stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+      <!-- Grid lines -->
+      <line x1="0" y1="0" x2="600" y2="0" stroke="var(--border)" stroke-width="0.5"/>
+      <line x1="0" y1="50" x2="600" y2="50" stroke="var(--border)" stroke-width="0.5"/>
+      <line x1="0" y1="100" x2="600" y2="100" stroke="var(--border)" stroke-width="0.5"/>
+      <!-- Y-axis labels -->
+      <text x="604" y="4" fill="var(--text-dim)" font-size="7" font-family="JetBrains Mono,monospace">120</text>
+      <text x="604" y="54" fill="var(--text-dim)" font-size="7" font-family="JetBrains Mono,monospace">60</text>
+      <text x="604" y="104" fill="var(--text-dim)" font-size="7" font-family="JetBrains Mono,monospace">0</text>
+      <!-- Time labels -->
+      ${[0,1,2,3,4,5,6,7,8,9,10].map(m=>`<text x="${(m/10)*600}" y="110" fill="var(--text-dim)" font-size="6" font-family="JetBrains Mono,monospace" text-anchor="middle">${m}m</text>`).join('')}
+      <!-- Threshold lines -->
+      ${threshLines}
+      <!-- Data line -->
+      <polyline id="history-line" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" points="${histPts}"/>
+    </svg>
+    <div style="text-align:center;font-size:11px;color:var(--text-dim);margin-top:6px" id="history-time-label">${histTime}</div>
+  </div>`:''}
+  ${minis?'<div class="section-title">Aktive Schwellenwerte</div>'+minis:''}`;
 }
 
 function rThresholds(){
