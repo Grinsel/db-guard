@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>dB Guard — Lautstärkewächter</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10; --surface: #12151c; --surface2: #1a1e28; --border: #252a36;
+    --text: #e8eaf0; --text-dim: #6b7280;
+    --green: #22c55e; --yellow: #eab308; --orange: #f97316; --red: #ef4444;
+    --accent: #3b82f6; --accent-glow: rgba(59, 130, 246, 0.3);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family:'Outfit',sans-serif; background:var(--bg); color:var(--text); min-height:100dvh; overflow-x:hidden; -webkit-font-smoothing:antialiased; }
+  .app { max-width:480px; margin:0 auto; padding:16px; padding-bottom:100px; }
+  .header { display:flex; align-items:center; gap:10px; padding:12px 0 20px; }
+  .logo-icon { width:36px; height:36px; background:linear-gradient(135deg,var(--accent),#6366f1); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; box-shadow:0 0 20px var(--accent-glow); }
+  .logo-text { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:18px; }
+  .logo-sub { font-size:11px; color:var(--text-dim); letter-spacing:1px; text-transform:uppercase; }
+  .tabs { display:flex; gap:4px; background:var(--surface); border-radius:12px; padding:4px; margin-bottom:20px; }
+  .tab { flex:1; padding:10px 8px; border:none; background:none; color:var(--text-dim); font-family:'Outfit',sans-serif; font-size:13px; font-weight:500; border-radius:9px; cursor:pointer; transition:all 0.2s; }
+  .tab.active { background:var(--surface2); color:var(--text); box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+  .meter-section { text-align:center; padding:10px 0 24px; }
+  .meter-ring-container { position:relative; width:220px; height:220px; margin:0 auto 16px; }
+  .meter-ring { width:100%; height:100%; transform:rotate(-90deg); }
+  .meter-ring-bg { fill:none; stroke:var(--surface2); stroke-width:12; }
+  .meter-ring-fill { fill:none; stroke-width:12; stroke-linecap:round; }
+  .meter-value-container { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; }
+  .meter-value { font-family:'JetBrains Mono',monospace; font-size:52px; font-weight:800; line-height:1; }
+  .meter-unit { font-family:'JetBrains Mono',monospace; font-size:16px; color:var(--text-dim); letter-spacing:2px; margin-top:4px; }
+  .meter-label { font-size:13px; color:var(--text-dim); margin-top:2px; }
+  .meter-bar-row { display:flex; gap:2px; justify-content:center; height:32px; align-items:flex-end; margin:12px 0; }
+  .meter-bar-segment { width:6px; border-radius:3px; background:var(--surface2); min-height:3px; }
+  .main-btn { display:inline-flex; align-items:center; gap:8px; padding:14px 36px; border:none; border-radius:14px; font-family:'Outfit',sans-serif; font-size:16px; font-weight:600; cursor:pointer; transition:all 0.2s; color:white; }
+  .main-btn.start { background:linear-gradient(135deg,var(--accent),#6366f1); box-shadow:0 4px 20px var(--accent-glow); }
+  .main-btn.stop { background:linear-gradient(135deg,var(--red),#dc2626); box-shadow:0 4px 20px rgba(239,68,68,0.3); }
+  .main-btn:active { transform:scale(0.96); }
+  .section-title { font-size:14px; font-weight:600; color:var(--text-dim); letter-spacing:1px; text-transform:uppercase; margin:24px 0 12px; }
+  .threshold-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:10px; transition:border-color 0.3s; }
+  .threshold-card.triggered { border-color:var(--red); box-shadow:0 0 20px rgba(239,68,68,0.15); animation:pulse-border 1s infinite; }
+  @keyframes pulse-border { 0%,100%{border-color:var(--red)} 50%{border-color:rgba(239,68,68,0.4)} }
+  .threshold-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .threshold-db { font-family:'JetBrains Mono',monospace; font-size:22px; font-weight:700; }
+  .threshold-actions { display:flex; gap:6px; }
+  .icon-btn { width:34px; height:34px; border:1px solid var(--border); background:var(--surface2); border-radius:8px; color:var(--text-dim); font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .icon-btn:hover { color:var(--text); border-color:var(--text-dim); }
+  .icon-btn.danger:hover { color:var(--red); border-color:var(--red); }
+  .threshold-options { display:flex; gap:8px; flex-wrap:wrap; }
+  .option-chip { display:flex; align-items:center; gap:6px; padding:6px 12px; background:var(--surface2); border-radius:8px; font-size:12px; color:var(--text-dim); }
+  .option-chip .dot { width:8px; height:8px; border-radius:50%; }
+  .t-mini { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 14px; margin-bottom:6px; display:flex; align-items:center; justify-content:space-between; transition:all 0.3s; }
+  .t-mini.triggered { border-color:var(--red); box-shadow:0 0 12px rgba(239,68,68,0.15); }
+  .add-btn { width:100%; padding:14px; border:2px dashed var(--border); border-radius:16px; background:none; color:var(--text-dim); font-family:'Outfit',sans-serif; font-size:14px; font-weight:500; cursor:pointer; }
+  .add-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(8px); z-index:100; display:flex; align-items:flex-end; justify-content:center; animation:fadeIn 0.2s; }
+  @keyframes fadeIn { from{opacity:0} }
+  .modal { background:var(--surface); border-radius:24px 24px 0 0; padding:24px 20px 36px; width:100%; max-width:480px; max-height:85dvh; overflow-y:auto; animation:slideUp 0.3s ease; }
+  @keyframes slideUp { from{transform:translateY(100%)} }
+  .modal-title { font-size:18px; font-weight:700; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; }
+  .modal-close { width:32px; height:32px; border-radius:50%; border:none; background:var(--surface2); color:var(--text-dim); font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .form-group { margin-bottom:20px; }
+  .form-label { font-size:12px; font-weight:600; color:var(--text-dim); letter-spacing:0.5px; text-transform:uppercase; margin-bottom:8px; display:block; }
+  .form-input { width:100%; padding:12px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; color:var(--text); font-family:'JetBrains Mono',monospace; font-size:18px; font-weight:600; outline:none; }
+  .form-input:focus { border-color:var(--accent); }
+  .form-input::placeholder { color:var(--text-dim); font-size:14px; }
+  .form-hint { font-size:11px; color:var(--text-dim); margin-top:6px; }
+  .tone-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .tone-option { padding:10px 8px; background:var(--surface2); border:2px solid var(--border); border-radius:10px; color:var(--text-dim); font-size:12px; font-weight:500; text-align:center; cursor:pointer; }
+  .tone-option.selected { border-color:var(--accent); color:var(--text); background:rgba(59,130,246,0.1); }
+  .tone-option .tone-icon { font-size:20px; margin-bottom:4px; }
+  .toggle-row { display:flex; align-items:center; justify-content:space-between; padding:12px 0; }
+  .toggle-label { font-size:14px; font-weight:500; }
+  .toggle { width:48px; height:28px; background:var(--surface2); border:1px solid var(--border); border-radius:14px; position:relative; cursor:pointer; transition:all 0.2s; }
+  .toggle.on { background:var(--accent); border-color:var(--accent); }
+  .toggle-knob { width:22px; height:22px; background:white; border-radius:50%; position:absolute; top:2px; left:2px; transition:transform 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.3); }
+  .toggle.on .toggle-knob { transform:translateX(20px); }
+  .save-btn { width:100%; padding:14px; background:linear-gradient(135deg,var(--accent),#6366f1); border:none; border-radius:14px; color:white; font-family:'Outfit',sans-serif; font-size:16px; font-weight:600; cursor:pointer; margin-top:8px; }
+  .save-btn:active { transform:scale(0.98); }
+  .preview-btn { display:block; margin:8px auto 0; padding:8px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text-dim); font-family:'Outfit',sans-serif; font-size:12px; cursor:pointer; }
+  .calib-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:16px; }
+  .calib-title { font-size:16px; font-weight:600; margin-bottom:6px; }
+  .calib-desc { font-size:13px; color:var(--text-dim); line-height:1.5; margin-bottom:16px; }
+  .calib-current { display:flex; align-items:center; justify-content:space-between; background:var(--surface2); border-radius:12px; padding:14px 16px; margin-bottom:12px; }
+  .calib-label { font-size:13px; color:var(--text-dim); }
+  .calib-value { font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:700; }
+  .calib-step { display:flex; gap:12px; margin-bottom:12px; }
+  .calib-step-num { width:28px; height:28px; flex-shrink:0; background:var(--surface2); border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:var(--accent); }
+  .calib-step-text { font-size:13px; color:var(--text-dim); line-height:1.5; padding-top:4px; }
+  .calib-btn { padding:10px 20px; background:var(--accent); border:none; border-radius:12px; color:white; font-family:'Outfit',sans-serif; font-size:14px; font-weight:600; cursor:pointer; }
+  .calib-btn:active { transform:scale(0.96); }
+  .calib-reading { font-family:'JetBrains Mono',monospace; font-size:28px; font-weight:800; text-align:center; padding:20px; color:var(--accent); }
+  .calib-progress { height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; margin:8px 0; }
+  .calib-progress-fill { height:100%; background:var(--accent); border-radius:2px; transition:width 0.1s; }
+  .status-bar { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); padding:12px 16px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:13px; color:var(--text-dim); z-index:50; }
+  .status-dot { width:8px; height:8px; border-radius:50%; background:var(--text-dim); }
+  .status-dot.active { background:var(--green); box-shadow:0 0 8px rgba(34,197,94,0.5); animation:blink 2s infinite; }
+  .status-dot.alert { background:var(--red); box-shadow:0 0 8px rgba(239,68,68,0.5); }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .alert-flash { position:fixed; inset:0; pointer-events:none; z-index:90; animation:flashRed 0.5s forwards; }
+  @keyframes flashRed { 0%{background:rgba(239,68,68,0.3)} 100%{background:transparent} }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+const TONES = [
+  { id:'beep', name:'Beep', icon:'🔔', freq:880, type:'sine' },
+  { id:'alarm', name:'Alarm', icon:'🚨', freq:660, type:'square' },
+  { id:'chime', name:'Glocke', icon:'🔊', freq:1200, type:'sine' },
+  { id:'buzz', name:'Buzzer', icon:'📢', freq:440, type:'sawtooth' },
+  { id:'horn', name:'Horn', icon:'📯', freq:330, type:'triangle' },
+  { id:'siren', name:'Sirene', icon:'🚑', freq:0, type:'siren' },
+];
+
+let state = {
+  activeTab:'monitor', monitoring:false, currentDb:0, rawLevel:0, peakDb:0,
+  calibrationOffset: parseFloat(localStorage.getItem('dbguard_calibOffset')||'94'),
+  calibrationGain: parseFloat(localStorage.getItem('dbguard_calibGain')||'1'),
+  thresholds: JSON.parse(localStorage.getItem('dbguard_thresholds')||'[]'),
+  editingThreshold:null, showModal:false, calibrating:false, calibTargetDb:70,
+  calibSamples:[], calibProgress:0, triggeredIds:new Set(),
+  barLevels: new Array(30).fill(0),
+};
+if(!state.thresholds.length){
+  state.thresholds=[{id:1,db:70,tone:'beep',vibrate:true,enabled:true,name:'Warnung'},{id:2,db:85,tone:'alarm',vibrate:true,enabled:true,name:'Laut!'}];
+  saveThresholds();
+}
+
+let audioCtx, analyser, micStream, animFrame, alarmOsc=null, alarmGain=null, cooldowns={};
+
+function saveThresholds(){localStorage.setItem('dbguard_thresholds',JSON.stringify(state.thresholds))}
+function saveCalibration(){localStorage.setItem('dbguard_calibOffset',state.calibrationOffset.toString());localStorage.setItem('dbguard_calibGain',state.calibrationGain.toString())}
+
+function dbColor(d){return d<50?'var(--green)':d<70?'var(--yellow)':d<85?'var(--orange)':'var(--red)'}
+function dbHex(d){return d<50?'#22c55e':d<70?'#eab308':d<85?'#f97316':'#ef4444'}
+function dbLabel(d){return d<40?'Sehr leise':d<50?'Leise':d<60?'Moderat':d<70?'Normal':d<80?'Laut':d<90?'Sehr laut':d<100?'Gefährlich':'Extrem!'}
+
+// ===== AUDIO =====
+async function startMonitoring(){
+  try{
+    audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    const src=audioCtx.createMediaStreamSource(micStream);
+    analyser=audioCtx.createAnalyser(); analyser.fftSize=2048; analyser.smoothingTimeConstant=0.3;
+    src.connect(analyser);
+    state.monitoring=true; state.peakDb=0;
+    render(); // full render: swap start->stop button
+    measureLoop();
+  }catch(e){alert('Mikrofon-Zugriff benötigt! Bitte Berechtigung erteilen.')}
+}
+
+function stopMonitoring(){
+  state.monitoring=false;
+  if(micStream) micStream.getTracks().forEach(t=>t.stop());
+  if(audioCtx&&audioCtx.state!=='closed') audioCtx.close();
+  if(animFrame) cancelAnimationFrame(animFrame);
+  stopAlarm();
+  state.currentDb=0; state.barLevels.fill(0); state.triggeredIds.clear();
+  render(); // full render: swap stop->start button
+}
+
+function measureLoop(){
+  if(!state.monitoring) return;
+  const data=new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(data);
+  let sum=0;
+  for(let i=0;i<data.length;i++) sum+=data[i]*data[i];
+  const rms=Math.sqrt(sum/data.length);
+  let rawDb=rms>0?20*Math.log10(rms):-100;
+  let db=(rawDb*state.calibrationGain)+state.calibrationOffset;
+  db=Math.max(0,Math.min(130,db));
+  state.rawLevel=rawDb;
+  state.currentDb=Math.round(db*10)/10;
+  if(state.currentDb>state.peakDb) state.peakDb=state.currentDb;
+  state.barLevels.shift(); state.barLevels.push(state.currentDb);
+  checkThresholds();
+  updateMeter(); // <<< FAST UPDATE, no DOM rebuild!
+  animFrame=requestAnimationFrame(measureLoop);
+}
+
+// ===== FAST METER UPDATE (only touches existing elements) =====
+function updateMeter(){
+  const db=state.currentDb, color=dbHex(db);
+  const C=2*Math.PI*90, pct=Math.min(db/120,1), off=C*(1-pct*0.75);
+  const ring=document.getElementById('ring-fill');
+  if(ring){ring.setAttribute('stroke',color);ring.setAttribute('stroke-dashoffset',off)}
+  const v=document.getElementById('db-value');
+  if(v){v.textContent=db.toFixed(1);v.style.color=color}
+  const l=document.getElementById('db-label');
+  if(l) l.textContent=dbLabel(db);
+  const p=document.getElementById('peak-value');
+  if(p) p.textContent='Peak: '+state.peakDb.toFixed(1)+' dB';
+  const bars=document.getElementById('meter-bars');
+  if(bars){const s=bars.children;for(let i=0;i<s.length&&i<state.barLevels.length;i++){const val=state.barLevels[i];s[i].style.height=Math.max(3,(val/120)*32)+'px';s[i].style.background=val>0?dbHex(val):'#1a1e28'}}
+  const sd=document.getElementById('status-dot');
+  if(sd) sd.className='status-dot '+(state.monitoring?(state.triggeredIds.size>0?'alert':'active'):'');
+  const st=document.getElementById('status-text');
+  if(st) st.textContent=state.monitoring?(state.triggeredIds.size>0?'⚠️ Schwellenwert überschritten!':'Überwachung aktiv'):'Überwachung gestoppt';
+  state.thresholds.forEach(t=>{const el=document.getElementById('mini-'+t.id);if(el){if(state.triggeredIds.has(t.id))el.classList.add('triggered');else el.classList.remove('triggered')}});
+  const cr=document.getElementById('calib-reading');if(cr)cr.textContent=db.toFixed(1)+' dB';
+  const cp=document.getElementById('calib-progress-fill');if(cp)cp.style.width=state.calibProgress+'%';
+  const cpct=document.getElementById('calib-pct');if(cpct)cpct.textContent='Messung läuft... '+Math.round(state.calibProgress)+'%';
+}
+
+// ===== THRESHOLDS & ALARMS =====
+function checkThresholds(){
+  const now=Date.now(); let best=null;
+  for(const t of state.thresholds){if(!t.enabled)continue;if(state.currentDb>=t.db){state.triggeredIds.add(t.id);if(!best||t.db>best.db)best=t}else{state.triggeredIds.delete(t.id)}}
+  if(best){if(!cooldowns[best.id]||now-cooldowns[best.id]>2000){cooldowns[best.id]=now;triggerAlarm(best)}}else{stopAlarm()}
+}
+function triggerAlarm(t){
+  if(t.vibrate&&navigator.vibrate)navigator.vibrate([200,100,200]);
+  playTone(t.tone);
+  const f=document.createElement('div');f.className='alert-flash';document.body.appendChild(f);setTimeout(()=>f.remove(),500);
+}
+function playTone(id){
+  if(!audioCtx||audioCtx.state==='closed')return; stopAlarm();
+  const t=TONES.find(x=>x.id===id)||TONES[0];
+  alarmGain=audioCtx.createGain();alarmGain.connect(audioCtx.destination);alarmGain.gain.setValueAtTime(0.15,audioCtx.currentTime);
+  alarmOsc=audioCtx.createOscillator();
+  if(t.type==='siren'){alarmOsc.type='sine';alarmOsc.frequency.setValueAtTime(600,audioCtx.currentTime);alarmOsc.frequency.linearRampToValueAtTime(1000,audioCtx.currentTime+0.3);alarmOsc.frequency.linearRampToValueAtTime(600,audioCtx.currentTime+0.6);alarmOsc.connect(alarmGain);alarmOsc.start();alarmOsc.stop(audioCtx.currentTime+0.6)}
+  else{alarmOsc.type=t.type;alarmOsc.frequency.setValueAtTime(t.freq,audioCtx.currentTime);alarmOsc.connect(alarmGain);alarmOsc.start();alarmGain.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.4);alarmOsc.stop(audioCtx.currentTime+0.4)}
+}
+function playPreview(id){
+  const c=new(window.AudioContext||window.webkitAudioContext)();const g=c.createGain();g.connect(c.destination);g.gain.setValueAtTime(0.15,c.currentTime);
+  const t=TONES.find(x=>x.id===id)||TONES[0];const o=c.createOscillator();
+  if(t.type==='siren'){o.type='sine';o.frequency.setValueAtTime(600,c.currentTime);o.frequency.linearRampToValueAtTime(1000,c.currentTime+0.3);o.frequency.linearRampToValueAtTime(600,c.currentTime+0.6);o.connect(g);o.start();o.stop(c.currentTime+0.6)}
+  else{o.type=t.type;o.frequency.setValueAtTime(t.freq,c.currentTime);o.connect(g);o.start();g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+0.5);o.stop(c.currentTime+0.5)}
+}
+function stopAlarm(){try{if(alarmOsc){alarmOsc.stop();alarmOsc.disconnect()}}catch(e){}try{if(alarmGain)alarmGain.disconnect()}catch(e){}alarmOsc=null;alarmGain=null}
+
+// ===== CALIBRATION =====
+async function startCalibration(){
+  if(!state.monitoring) await startMonitoring();
+  state.calibrating=true; state.calibSamples=[]; state.calibProgress=0; render();
+  const iv=setInterval(()=>{
+    if(!state.calibrating){clearInterval(iv);return}
+    state.calibSamples.push(state.rawLevel);
+    state.calibProgress=Math.min(100,(state.calibSamples.length/50)*100);
+    if(state.calibSamples.length>=50){clearInterval(iv);const avg=state.calibSamples.reduce((a,b)=>a+b,0)/state.calibSamples.length;state.calibrationOffset=state.calibTargetDb-avg;state.calibrationGain=1;state.calibrating=false;saveCalibration();render()}
+  },100);
+}
+function resetCalibration(){state.calibrationOffset=94;state.calibrationGain=1;saveCalibration();render()}
+
+// ===== FULL RENDER (only on user actions) =====
+function render(){
+  document.getElementById('app').innerHTML=`
+    <div class="header"><div class="logo-icon">📊</div><div><div class="logo-text">dB Guard</div><div class="logo-sub">Lautstärkewächter</div></div></div>
+    <div class="tabs">
+      <button class="tab ${state.activeTab==='monitor'?'active':''}" onclick="switchTab('monitor')">📊 Monitor</button>
+      <button class="tab ${state.activeTab==='thresholds'?'active':''}" onclick="switchTab('thresholds')">⚡ Schwellenwerte</button>
+      <button class="tab ${state.activeTab==='calibrate'?'active':''}" onclick="switchTab('calibrate')">🎯 Kalibrierung</button>
+    </div>
+    ${state.activeTab==='monitor'?rMonitor():state.activeTab==='thresholds'?rThresholds():rCalib()}
+    ${state.showModal?rModal():''}
+    <div class="status-bar"><div class="status-dot ${state.monitoring?(state.triggeredIds.size>0?'alert':'active'):''}" id="status-dot"></div><span id="status-text">${state.monitoring?(state.triggeredIds.size>0?'⚠️ Schwellenwert überschritten!':'Überwachung aktiv'):'Überwachung gestoppt'}</span></div>`;
+}
+
+function rMonitor(){
+  const db=state.currentDb,pct=Math.min(db/120,1),C=2*Math.PI*90,off=C*(1-pct*0.75),col=dbColor(db);
+  const bars=state.barLevels.map(v=>`<div class="meter-bar-segment" style="height:${Math.max(3,(v/120)*32)}px;background:${v>0?dbColor(v):'var(--surface2)'}"></div>`).join('');
+  const minis=state.thresholds.filter(t=>t.enabled).map(t=>{const tn=TONES.find(x=>x.id===t.tone)||TONES[0];return`<div class="t-mini ${state.triggeredIds.has(t.id)?'triggered':''}" id="mini-${t.id}"><div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim)"><span>${tn.icon}</span> ${t.name||''}</div><span style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:${dbColor(t.db)}">${t.db} dB</span></div>`}).join('');
+  return`<div class="meter-section">
+    <div class="meter-ring-container"><svg class="meter-ring" viewBox="0 0 200 200"><circle class="meter-ring-bg" cx="100" cy="100" r="90" stroke-dasharray="${C}" stroke-dashoffset="${C*0.25}"/><circle class="meter-ring-fill" cx="100" cy="100" r="90" id="ring-fill" stroke="${col}" stroke-dasharray="${C}" stroke-dashoffset="${off}"/></svg>
+    <div class="meter-value-container"><div class="meter-value" id="db-value" style="color:${col}">${state.monitoring?db.toFixed(1):'—'}</div><div class="meter-unit">dB</div><div class="meter-label" id="db-label">${state.monitoring?dbLabel(db):'Gestoppt'}</div></div></div>
+    <div class="meter-bar-row" id="meter-bars">${bars}</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px;min-height:18px" id="peak-value">${state.monitoring?'Peak: '+state.peakDb.toFixed(1)+' dB':''}</div>
+    <button class="main-btn ${state.monitoring?'stop':'start'}" onclick="${state.monitoring?'stopMonitoring()':'startMonitoring()'}">${state.monitoring?'⏹ Stoppen':'▶ Überwachung starten'}</button>
+  </div>${minis?'<div class="section-title">Aktive Schwellenwerte</div>'+minis:''}`;
+}
+
+function rThresholds(){
+  return`<div class="section-title">Schwellenwerte verwalten</div>${state.thresholds.map(t=>{const tn=TONES.find(x=>x.id===t.tone)||TONES[0];return`<div class="threshold-card" style="opacity:${t.enabled?1:0.5}"><div class="threshold-header"><div><span class="threshold-db" style="color:${dbColor(t.db)}">${t.db} dB</span><span style="font-size:13px;color:var(--text-dim);margin-left:8px">${t.name||''}</span></div><div class="threshold-actions"><button class="icon-btn" onclick="editThreshold(${t.id})">✏️</button><button class="icon-btn" onclick="toggleThreshold(${t.id})">${t.enabled?'👁':'👁‍🗨'}</button><button class="icon-btn danger" onclick="deleteThreshold(${t.id})">🗑</button></div></div><div class="threshold-options"><div class="option-chip"><div class="dot" style="background:var(--accent)"></div>${tn.icon} ${tn.name}</div><div class="option-chip"><div class="dot" style="background:${t.vibrate?'var(--green)':'var(--text-dim)'}"></div>Vibration ${t.vibrate?'An':'Aus'}</div></div></div>`}).join('')}<button class="add-btn" onclick="addThreshold()">＋ Schwellenwert hinzufügen</button>`;
+}
+
+function rCalib(){
+  return`<div class="calib-card"><div class="calib-title">Gerät kalibrieren</div><div class="calib-desc">Nutze eine bekannte Schallquelle und ein Referenzgerät. Gib den echten dB-Wert ein und starte die Messung.</div><div class="calib-current"><span class="calib-label">Aktueller Offset</span><span class="calib-value">${state.calibrationOffset.toFixed(1)} dB</span></div>
+  <div style="margin:16px 0"><div class="calib-step"><div class="calib-step-num">1</div><div class="calib-step-text">Konstante Schallquelle erzeugen (Gespräch, Musik, etc.)</div></div><div class="calib-step"><div class="calib-step-num">2</div><div class="calib-step-text">Echten dB-Wert mit Referenzgerät messen und unten eingeben</div></div><div class="calib-step"><div class="calib-step-num">3</div><div class="calib-step-text">Kalibrierung starten — misst 5 Sekunden und berechnet Offset</div></div></div>
+  <div class="form-group"><label class="form-label">Tatsächlicher Pegel (dB SPL)</label><input class="form-input" type="number" id="calibTarget" value="${state.calibTargetDb}" onchange="state.calibTargetDb=parseInt(this.value)||70" min="30" max="120" placeholder="z.B. 70"></div>
+  ${state.calibrating?`<div class="calib-reading" id="calib-reading">${state.currentDb.toFixed(1)} dB</div><div class="calib-progress"><div class="calib-progress-fill" id="calib-progress-fill" style="width:${state.calibProgress}%"></div></div><div style="text-align:center;font-size:12px;color:var(--text-dim);margin-top:8px" id="calib-pct">Messung läuft... ${Math.round(state.calibProgress)}%</div>`:`<button class="calib-btn" style="width:100%;padding:14px" onclick="startCalibration()">🎯 Kalibrierung starten</button>`}
+  </div><div class="calib-card"><div class="calib-title">Zurücksetzen</div><div class="calib-desc">Setzt Kalibrierung auf Standardwert zurück.</div><button class="calib-btn" style="background:var(--surface2);color:var(--text-dim);width:100%;padding:12px" onclick="resetCalibration()">Auf Standard zurücksetzen</button></div>
+  <div class="calib-card"><div class="calib-title">Typische Lautstärken</div><div style="font-size:13px;color:var(--text-dim);line-height:2">🌿 30 dB — Flüstern<br>🏠 50 dB — Ruhige Wohnung<br>🗣 60 dB — Normales Gespräch<br>🚗 70 dB — Straßenverkehr<br>📢 80 dB — Lauter Verkehr<br>🏭 90 dB — Fabrik / Rasenmäher<br>🎸 100 dB — Konzert<br>🛩 110 dB — Schmerzgrenze<br>💥 120+ dB — Gehörschaden</div></div>`;
+}
+
+function rModal(){
+  const t=state.editingThreshold||{id:0,db:70,tone:'beep',vibrate:true,enabled:true,name:''},isNew=t.id===0;
+  return`<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-title">${isNew?'Neuer Schwellenwert':'Bearbeiten'}<button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="form-group"><label class="form-label">Name (optional)</label><input class="form-input" type="text" id="modal_name" value="${t.name||''}" placeholder="z.B. Warnung..." style="font-size:14px"></div>
+    <div class="form-group"><label class="form-label">Schwellenwert (dB)</label><input class="form-input" type="number" id="modal_db" value="${t.db}" min="30" max="130"><div class="form-hint">Alarm bei Überschreitung</div></div>
+    <div class="form-group"><label class="form-label">Alarmton</label><div class="tone-grid">${TONES.map(tn=>`<div class="tone-option ${t.tone===tn.id?'selected':''}" onclick="selectTone('${tn.id}')"><div class="tone-icon">${tn.icon}</div>${tn.name}</div>`).join('')}</div><button class="preview-btn" onclick="playPreview('${t.tone}')">▶ Vorhören</button></div>
+    <div class="form-group"><div class="toggle-row"><span class="toggle-label">📳 Vibration</span><div class="toggle ${t.vibrate?'on':''}" onclick="toggleModalVibrate()"><div class="toggle-knob"></div></div></div></div>
+    <button class="save-btn" onclick="saveModal()">${isNew?'＋ Hinzufügen':'💾 Speichern'}</button>
+  </div></div>`;
+}
+
+// ===== ACTIONS (each triggers full render) =====
+function switchTab(t){state.activeTab=t;render()}
+function addThreshold(){state.editingThreshold={id:0,db:70,tone:'beep',vibrate:true,enabled:true,name:''};state.showModal=true;render()}
+function editThreshold(id){const t=state.thresholds.find(x=>x.id===id);if(t){state.editingThreshold={...t};state.showModal=true;render()}}
+function deleteThreshold(id){state.thresholds=state.thresholds.filter(x=>x.id!==id);saveThresholds();render()}
+function toggleThreshold(id){const t=state.thresholds.find(x=>x.id===id);if(t){t.enabled=!t.enabled;saveThresholds();render()}}
+function selectTone(id){if(state.editingThreshold){state.editingThreshold.tone=id;playPreview(id);render()}}
+function toggleModalVibrate(){if(state.editingThreshold){state.editingThreshold.vibrate=!state.editingThreshold.vibrate;if(state.editingThreshold.vibrate&&navigator.vibrate)navigator.vibrate(100);render()}}
+function closeModal(){state.showModal=false;state.editingThreshold=null;render()}
+function saveModal(){
+  const t=state.editingThreshold;if(!t)return;
+  t.db=Math.max(30,Math.min(130,parseInt(document.getElementById('modal_db').value)||70));
+  t.name=document.getElementById('modal_name').value||'';
+  if(t.id===0){t.id=Date.now();state.thresholds.push(t)}else{const i=state.thresholds.findIndex(x=>x.id===t.id);if(i>=0)state.thresholds[i]=t}
+  state.thresholds.sort((a,b)=>a.db-b.db);saveThresholds();closeModal();
+}
+
+render();
+</script>
+</body>
+</html>
