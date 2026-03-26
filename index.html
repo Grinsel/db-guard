@@ -110,7 +110,7 @@ const TONES = [
   { id:'siren', name:'Sirene', icon:'🚑', freq:0, type:'siren' },
 ];
 
-const REFERENCE_DB = 50;
+const REFERENCE_DB = 80;
 
 let state = {
   activeTab:'monitor', monitoring:false, currentDb:0, peakDb:0,
@@ -304,7 +304,7 @@ async function startAutoCalibration(){
   const duration=3;
   const buffer=calibCtx.createBuffer(1,sampleRate*duration,sampleRate);
   const channel=buffer.getChannelData(0);
-  for(let i=0;i<channel.length;i++) channel[i]=(Math.random()*2-1)*0.15;
+  for(let i=0;i<channel.length;i++) channel[i]=(Math.random()*2-1)*0.8;
   const noiseSource=calibCtx.createBufferSource();
   noiseSource.buffer=buffer;
   noiseSource.connect(calibCtx.destination);
