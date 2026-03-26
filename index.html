@@ -122,8 +122,11 @@ let state = {
   currentSecondPeak: 0,
   lastSecondTimestamp: 0,
   wakeLock: null,
-  autoCalibrating: false,
+  autoCalibPhase: 'idle',
+  autoCalibCountdown: 0,
   autoCalibProgress: 0,
+  autoCalibResult: null,
+  smoothedDb: 0,
 };
 if(!state.thresholds.length){
   state.thresholds=[{id:1,db:70,tone:'beep',vibrate:true,enabled:true,name:'Warnung'},{id:2,db:85,tone:'alarm',vibrate:true,enabled:true,name:'Laut!'}];
@@ -169,7 +172,7 @@ function stopMonitoring(){
   if(audioCtx&&audioCtx.state!=='closed') audioCtx.close();
   if(animFrame) cancelAnimationFrame(animFrame);
   stopAlarm();
-  state.currentDb=0; state.barLevels.fill(0); state.triggeredIds.clear();
+  state.currentDb=0; state.smoothedDb=0; state.barLevels.fill(0); state.triggeredIds.clear();
   render();
 }
 
@@ -184,6 +187,10 @@ function measureLoop(){
   let db=rawDb+state.calibrationOffset;
   db=Math.max(0,Math.min(130,db));
   state.currentDb=Math.round(db*10)/10;
+  // EMA-Smoothing for display
+  const alpha=0.1;
+  if(state.smoothedDb===0&&state.currentDb>0){state.smoothedDb=state.currentDb}
+  else{state.smoothedDb=alpha*state.currentDb+(1-alpha)*state.smoothedDb}
   if(state.currentDb>state.peakDb) state.peakDb=state.currentDb;
   state.barLevels.shift(); state.barLevels.push(state.currentDb);
   // History tracking: peak per second
@@ -206,10 +213,13 @@ function updateMeter(){
   const C=2*Math.PI*90, pct=Math.min(db/120,1), off=C*(1-pct*0.75);
   const ring=document.getElementById('ring-fill');
   if(ring){ring.setAttribute('stroke',color);ring.setAttribute('stroke-dashoffset',off)}
+  const sDb=state.smoothedDb,sColor=dbHex(sDb);
   const v=document.getElementById('db-value');
-  if(v){v.textContent=db.toFixed(1);v.style.color=color}
+  if(v){v.textContent=Math.round(sDb);v.style.color=sColor}
+  const raw=document.getElementById('db-raw');
+  if(raw) raw.textContent=db.toFixed(1)+' dB';
   const l=document.getElementById('db-label');
-  if(l) l.textContent=dbLabel(db);
+  if(l) l.textContent=dbLabel(sDb);
   const p=document.getElementById('peak-value');
   if(p) p.textContent='Peak: '+state.peakDb.toFixed(1)+' dB';
   const bars=document.getElementById('meter-bars');
@@ -291,14 +301,30 @@ document.addEventListener('visibilitychange',async()=>{
 
 
 // ===== AUTO-CALIBRATION =====
-async function startAutoCalibration(){
-  if(state.autoCalibrating) return;
-  // Need mic active
-  const wasMonitoring=state.monitoring;
-  if(!wasMonitoring) await startMonitoring();
-  state.autoCalibrating=true; state.autoCalibProgress=0; render();
+let _calibWasMonitoring=false;
 
-  // Create white noise buffer (2 seconds)
+async function startAutoCalibration(){
+  if(state.autoCalibPhase!=='idle') return;
+  // Need mic active
+  _calibWasMonitoring=state.monitoring;
+  if(!_calibWasMonitoring) await startMonitoring();
+
+  // --- Countdown Phase ---
+  state.autoCalibPhase='countdown'; state.autoCalibCountdown=5; state.autoCalibProgress=0; render();
+  for(let i=5;i>=1;i--){
+    if(state.autoCalibPhase!=='countdown') return; // aborted
+    state.autoCalibCountdown=i;
+    const cdEl=document.getElementById('autocalib-countdown');
+    if(cdEl) cdEl.textContent=i;
+    const cdBar=document.getElementById('autocalib-progress');
+    if(cdBar) cdBar.style.width=((5-i)/5*100)+'%';
+    await new Promise(r=>setTimeout(r,1000));
+  }
+  if(state.autoCalibPhase!=='countdown') return;
+
+  // --- Measuring Phase ---
+  state.autoCalibPhase='measuring'; state.autoCalibProgress=0; render();
+
   const calibCtx=new(window.AudioContext||window.webkitAudioContext)();
   const sampleRate=calibCtx.sampleRate;
   const duration=3;
@@ -309,18 +335,17 @@ async function startAutoCalibration(){
   noiseSource.buffer=buffer;
   noiseSource.connect(calibCtx.destination);
 
-  // Wait 500ms for mic to settle, then play noise and measure
   await new Promise(r=>setTimeout(r,500));
   noiseSource.start();
 
   const samples=[];
-  const measureDuration=2500; // ms
+  const measureDuration=2500;
   const measureInterval=50;
   let elapsed=0;
 
   await new Promise(resolve=>{
     const iv=setInterval(()=>{
-      if(!state.autoCalibrating){clearInterval(iv);resolve();return}
+      if(state.autoCalibPhase!=='measuring'){clearInterval(iv);resolve();return}
       const data=new Float32Array(analyser.fftSize);
       analyser.getFloatTimeDomainData(data);
       let sum=0;
@@ -340,19 +365,41 @@ async function startAutoCalibration(){
   noiseSource.stop();
   calibCtx.close();
 
+  // --- Confirm Phase ---
   if(samples.length>0){
-    // Remove outliers (bottom/top 10%)
     samples.sort((a,b)=>a-b);
     const trim=Math.floor(samples.length*0.1);
     const trimmed=samples.slice(trim,samples.length-trim);
     const avgRaw=trimmed.reduce((a,b)=>a+b,0)/trimmed.length;
-    state.calibrationOffset=REFERENCE_DB-avgRaw;
-    localStorage.setItem('dbguard_calibOffset',state.calibrationOffset.toString());
+    state.autoCalibResult=REFERENCE_DB-avgRaw;
+  } else {
+    state.autoCalibResult=null;
   }
+  state.autoCalibPhase='confirm'; render();
+}
 
-  state.autoCalibrating=false;
-  if(!wasMonitoring) stopMonitoring();
+function confirmCalibration(accepted){
+  if(accepted&&state.autoCalibResult!==null){
+    state.calibrationOffset=state.autoCalibResult;
+    localStorage.setItem('dbguard_calibOffset',state.calibrationOffset.toString());
+    state.autoCalibPhase='idle'; state.autoCalibResult=null;
+    if(!_calibWasMonitoring) stopMonitoring();
+    render();
+  } else {
+    state.autoCalibResult=null;
+    state.autoCalibPhase='warning'; render();
+  }
+}
+
+function dismissCalibWarning(){
+  state.autoCalibPhase='idle';
+  if(!_calibWasMonitoring) stopMonitoring();
   render();
+}
+
+function retryCalibration(){
+  state.autoCalibPhase='idle';
+  startAutoCalibration();
 }
 
 // ===== FULL RENDER (only on user actions) =====
@@ -381,16 +428,41 @@ function rMonitor(){
 
   return`<div class="meter-section">
     <div class="meter-ring-container"><svg class="meter-ring" viewBox="0 0 200 200"><circle class="meter-ring-bg" cx="100" cy="100" r="90" stroke-dasharray="${C}" stroke-dashoffset="${C*0.25}"/><circle class="meter-ring-fill" cx="100" cy="100" r="90" id="ring-fill" stroke="${col}" stroke-dasharray="${C}" stroke-dashoffset="${off}"/></svg>
-    <div class="meter-value-container"><div class="meter-value" id="db-value" style="color:${col}">${state.monitoring?db.toFixed(1):'—'}</div><div class="meter-unit">dB</div><div class="meter-label" id="db-label">${state.monitoring?dbLabel(db):'Gestoppt'}</div></div></div>
+    <div class="meter-value-container"><div class="meter-value" id="db-value" style="color:${col}">${state.monitoring?Math.round(state.smoothedDb||db):'—'}</div><div class="meter-unit">dB</div><div id="db-raw" style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);margin-top:2px">${state.monitoring?db.toFixed(1)+' dB':''}</div><div class="meter-label" id="db-label">${state.monitoring?dbLabel(state.smoothedDb||db):'Gestoppt'}</div></div></div>
     <div class="meter-bar-row" id="meter-bars">${bars}</div>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px;min-height:18px" id="peak-value">${state.monitoring?'Peak: '+state.peakDb.toFixed(1)+' dB':''}</div>
     <button class="main-btn ${state.monitoring?'stop':'start'}" onclick="${state.monitoring?'stopMonitoring()':'startMonitoring()'}">${state.monitoring?'⏹ Stoppen':'▶ Überwachung starten'}</button>
-    ${state.autoCalibrating?`
+    ${state.autoCalibPhase==='countdown'?`
+      <div class="autocalib-status">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:48px;font-weight:800;color:var(--accent);line-height:1;margin-bottom:8px" id="autocalib-countdown">${state.autoCalibCountdown}</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">Bitte Geräte-Lautstärke auf Maximum stellen!</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Messung startet in ${state.autoCalibCountdown} Sek...</div>
+        <div class="autocalib-progress"><div class="autocalib-progress-fill" id="autocalib-progress" style="width:${((5-state.autoCalibCountdown)/5*100)}%"></div></div>
+      </div>
+    `:state.autoCalibPhase==='measuring'?`
       <div class="autocalib-status">
         <div style="font-size:13px;font-weight:600;margin-bottom:6px">Kalibrierung läuft...</div>
-        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Lautsprecher-Lautstärke auf Maximum stellen</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Prüfsignal wird abgespielt</div>
         <div class="autocalib-progress"><div class="autocalib-progress-fill" id="autocalib-progress" style="width:${state.autoCalibProgress}%"></div></div>
         <div style="font-size:11px;color:var(--text-dim);margin-top:6px" id="autocalib-pct">${Math.round(state.autoCalibProgress)}%</div>
+      </div>
+    `:state.autoCalibPhase==='confirm'?`
+      <div class="autocalib-status">
+        <div style="font-size:14px;font-weight:600;margin-bottom:8px">Messung abgeschlossen</div>
+        <div style="font-size:13px;color:var(--text-dim);margin-bottom:14px">War die Geräte-Lautstärke auf Maximum?</div>
+        <div style="display:flex;gap:10px;justify-content:center">
+          <button class="main-btn start" style="padding:10px 28px;font-size:14px" onclick="confirmCalibration(true)">Ja</button>
+          <button class="main-btn stop" style="padding:10px 28px;font-size:14px" onclick="confirmCalibration(false)">Nein</button>
+        </div>
+      </div>
+    `:state.autoCalibPhase==='warning'?`
+      <div class="autocalib-status" style="border-color:var(--orange)">
+        <div style="font-size:16px;margin-bottom:6px">&#9888;&#65039; Kalibrierung verworfen</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px">Ohne Kalibrierung bei maximaler Lautstärke können die Messungen ungenau sein.</div>
+        <div style="display:flex;gap:10px;justify-content:center">
+          <button class="main-btn start" style="padding:10px 24px;font-size:14px" onclick="retryCalibration()">Erneut versuchen</button>
+          <button class="main-btn" style="padding:10px 24px;font-size:14px;background:var(--surface2);border:1px solid var(--border)" onclick="dismissCalibWarning()">Schließen</button>
+        </div>
       </div>
     `:`
       <button class="autocalib-btn" onclick="startAutoCalibration()">
@@ -446,7 +518,7 @@ function rModal(){
 }
 
 // ===== ACTIONS (each triggers full render) =====
-function switchTab(t){state.activeTab=t;render()}
+function switchTab(t){if(state.autoCalibPhase!=='idle')return;state.activeTab=t;render()}
 function addThreshold(){state.editingThreshold={id:0,db:70,tone:'beep',vibrate:true,enabled:true,name:''};state.showModal=true;render()}
 function editThreshold(id){const t=state.thresholds.find(x=>x.id===id);if(t){state.editingThreshold={...t};state.showModal=true;render()}}
 function deleteThreshold(id){state.thresholds=state.thresholds.filter(x=>x.id!==id);saveThresholds();render()}
