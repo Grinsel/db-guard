@@ -21,7 +21,7 @@
   .logo-icon { width:36px; height:36px; background:linear-gradient(135deg,var(--accent),#6366f1); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; box-shadow:0 0 20px var(--accent-glow); }
   .logo-text { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:18px; }
   .logo-sub { font-size:11px; color:var(--text-dim); letter-spacing:1px; text-transform:uppercase; }
-  .tabs { display:flex; gap:4px; background:var(--surface); border-radius:12px; padding:4px; margin-bottom:20px; }
+  .tabs { display:flex; gap:4px; background:var(--surface); border-radius:12px; padding:4px; margin-bottom:20px; max-width:300px; }
   .tab { flex:1; padding:10px 8px; border:none; background:none; color:var(--text-dim); font-family:'Outfit',sans-serif; font-size:13px; font-weight:500; border-radius:9px; cursor:pointer; transition:all 0.2s; }
   .tab.active { background:var(--surface2); color:var(--text); box-shadow:0 2px 8px rgba(0,0,0,0.3); }
   .meter-section { text-align:center; padding:10px 0 24px; }
@@ -81,20 +81,6 @@
   .save-btn { width:100%; padding:14px; background:linear-gradient(135deg,var(--accent),#6366f1); border:none; border-radius:14px; color:white; font-family:'Outfit',sans-serif; font-size:16px; font-weight:600; cursor:pointer; margin-top:8px; }
   .save-btn:active { transform:scale(0.98); }
   .preview-btn { display:block; margin:8px auto 0; padding:8px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text-dim); font-family:'Outfit',sans-serif; font-size:12px; cursor:pointer; }
-  .calib-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:16px; }
-  .calib-title { font-size:16px; font-weight:600; margin-bottom:6px; }
-  .calib-desc { font-size:13px; color:var(--text-dim); line-height:1.5; margin-bottom:16px; }
-  .calib-current { display:flex; align-items:center; justify-content:space-between; background:var(--surface2); border-radius:12px; padding:14px 16px; margin-bottom:12px; }
-  .calib-label { font-size:13px; color:var(--text-dim); }
-  .calib-value { font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:700; }
-  .calib-step { display:flex; gap:12px; margin-bottom:12px; }
-  .calib-step-num { width:28px; height:28px; flex-shrink:0; background:var(--surface2); border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:var(--accent); }
-  .calib-step-text { font-size:13px; color:var(--text-dim); line-height:1.5; padding-top:4px; }
-  .calib-btn { padding:10px 20px; background:var(--accent); border:none; border-radius:12px; color:white; font-family:'Outfit',sans-serif; font-size:14px; font-weight:600; cursor:pointer; }
-  .calib-btn:active { transform:scale(0.96); }
-  .calib-reading { font-family:'JetBrains Mono',monospace; font-size:28px; font-weight:800; text-align:center; padding:20px; color:var(--accent); }
-  .calib-progress { height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; margin:8px 0; }
-  .calib-progress-fill { height:100%; background:var(--accent); border-radius:2px; transition:width 0.1s; }
   .status-bar { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); padding:12px 16px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:13px; color:var(--text-dim); z-index:50; }
   .status-dot { width:8px; height:8px; border-radius:50%; background:var(--text-dim); }
   .status-dot.active { background:var(--green); box-shadow:0 0 8px rgba(34,197,94,0.5); animation:blink 2s infinite; }
@@ -103,6 +89,13 @@
   .alert-flash { position:fixed; inset:0; pointer-events:none; z-index:90; animation:flashRed 0.5s forwards; }
   @keyframes flashRed { 0%{background:rgba(239,68,68,0.3)} 100%{background:transparent} }
   .wakelock-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; padding:2px 8px; background:rgba(34,197,94,0.1); color:var(--green); border-radius:6px; margin-left:8px; }
+  .autocalib-btn { display:flex; align-items:center; gap:8px; width:100%; padding:14px 16px; background:var(--surface); border:1px solid var(--border); border-radius:14px; color:var(--text-dim); font-family:'Outfit',sans-serif; font-size:14px; font-weight:500; cursor:pointer; transition:all 0.2s; margin-top:12px; }
+  .autocalib-btn:hover { border-color:var(--accent); color:var(--text); }
+  .autocalib-btn:active { transform:scale(0.98); }
+  .autocalib-progress { height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; margin-top:8px; }
+  .autocalib-progress-fill { height:100%; background:var(--accent); border-radius:2px; transition:width 0.15s; }
+  .autocalib-status { text-align:center; padding:14px 16px; background:var(--surface); border:1px solid var(--accent); border-radius:14px; margin-top:12px; }
+  .autocalib-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; padding:2px 8px; background:rgba(59,130,246,0.1); color:var(--accent); border-radius:6px; }
 </style>
 </head>
 <body>
@@ -117,20 +110,20 @@ const TONES = [
   { id:'siren', name:'Sirene', icon:'🚑', freq:0, type:'siren' },
 ];
 
+const REFERENCE_DB = 50;
+
 let state = {
-  activeTab:'monitor', monitoring:false, currentDb:0, rawLevel:0, peakDb:0,
+  activeTab:'monitor', monitoring:false, currentDb:0, peakDb:0,
   calibrationOffset: parseFloat(localStorage.getItem('dbguard_calibOffset')||'94'),
-  calibrationGain: parseFloat(localStorage.getItem('dbguard_calibGain')||'1'),
   thresholds: JSON.parse(localStorage.getItem('dbguard_thresholds')||'[]'),
-  editingThreshold:null, showModal:false, calibrating:false, calibTargetDb:70,
-  calibSamples:[], calibProgress:0, triggeredIds:new Set(),
+  editingThreshold:null, showModal:false, triggeredIds:new Set(),
   barLevels: new Array(30).fill(0),
-  // History chart (10 min = 600 seconds)
   historyLog: [],
   currentSecondPeak: 0,
   lastSecondTimestamp: 0,
-  // Wake Lock
   wakeLock: null,
+  autoCalibrating: false,
+  autoCalibProgress: 0,
 };
 if(!state.thresholds.length){
   state.thresholds=[{id:1,db:70,tone:'beep',vibrate:true,enabled:true,name:'Warnung'},{id:2,db:85,tone:'alarm',vibrate:true,enabled:true,name:'Laut!'}];
@@ -141,7 +134,6 @@ let audioCtx, analyser, micStream, animFrame, alarmOsc=null, alarmGain=null, coo
 let keepaliveOsc=null, keepaliveGain=null;
 
 function saveThresholds(){localStorage.setItem('dbguard_thresholds',JSON.stringify(state.thresholds))}
-function saveCalibration(){localStorage.setItem('dbguard_calibOffset',state.calibrationOffset.toString());localStorage.setItem('dbguard_calibGain',state.calibrationGain.toString())}
 
 function dbColor(d){return d<50?'var(--green)':d<70?'var(--yellow)':d<85?'var(--orange)':'var(--red)'}
 function dbHex(d){return d<50?'#22c55e':d<70?'#eab308':d<85?'#f97316':'#ef4444'}
@@ -189,9 +181,8 @@ function measureLoop(){
   for(let i=0;i<data.length;i++) sum+=data[i]*data[i];
   const rms=Math.sqrt(sum/data.length);
   let rawDb=rms>0?20*Math.log10(rms):-100;
-  let db=(rawDb*state.calibrationGain)+state.calibrationOffset;
+  let db=rawDb+state.calibrationOffset;
   db=Math.max(0,Math.min(130,db));
-  state.rawLevel=rawDb;
   state.currentDb=Math.round(db*10)/10;
   if(state.currentDb>state.peakDb) state.peakDb=state.currentDb;
   state.barLevels.shift(); state.barLevels.push(state.currentDb);
@@ -233,17 +224,14 @@ function updateMeter(){
   if(poly&&state.historyLog.length>1){
     const len=state.historyLog.length;
     const pts=state.historyLog.map((v,i)=>{
-      const x=(i/(600-1))*600;
-      const y=100-Math.min(v/120,1)*100;
+      const x=30+(i/(600-1))*290;
+      const y=170-Math.min(v/120,1)*160;
       return x.toFixed(1)+','+y.toFixed(1);
     }).join(' ');
     poly.setAttribute('points',pts);
   }
   const htl=document.getElementById('history-time-label');
   if(htl){const secs=state.historyLog.length;const m=Math.floor(secs/60);const s=secs%60;htl.textContent=m+':'+(s<10?'0':'')+s+' / 10:00'}
-  const cr=document.getElementById('calib-reading');if(cr)cr.textContent=db.toFixed(1)+' dB';
-  const cp=document.getElementById('calib-progress-fill');if(cp)cp.style.width=state.calibProgress+'%';
-  const cpct=document.getElementById('calib-pct');if(cpct)cpct.textContent='Messung läuft... '+Math.round(state.calibProgress)+'%';
 }
 
 // ===== THRESHOLDS & ALARMS =====
@@ -301,18 +289,71 @@ document.addEventListener('visibilitychange',async()=>{
   }
 });
 
-// ===== CALIBRATION =====
-async function startCalibration(){
-  if(!state.monitoring) await startMonitoring();
-  state.calibrating=true; state.calibSamples=[]; state.calibProgress=0; render();
-  const iv=setInterval(()=>{
-    if(!state.calibrating){clearInterval(iv);return}
-    state.calibSamples.push(state.rawLevel);
-    state.calibProgress=Math.min(100,(state.calibSamples.length/50)*100);
-    if(state.calibSamples.length>=50){clearInterval(iv);const avg=state.calibSamples.reduce((a,b)=>a+b,0)/state.calibSamples.length;state.calibrationOffset=state.calibTargetDb-avg;state.calibrationGain=1;state.calibrating=false;saveCalibration();render()}
-  },100);
+
+// ===== AUTO-CALIBRATION =====
+async function startAutoCalibration(){
+  if(state.autoCalibrating) return;
+  // Need mic active
+  const wasMonitoring=state.monitoring;
+  if(!wasMonitoring) await startMonitoring();
+  state.autoCalibrating=true; state.autoCalibProgress=0; render();
+
+  // Create white noise buffer (2 seconds)
+  const calibCtx=new(window.AudioContext||window.webkitAudioContext)();
+  const sampleRate=calibCtx.sampleRate;
+  const duration=3;
+  const buffer=calibCtx.createBuffer(1,sampleRate*duration,sampleRate);
+  const channel=buffer.getChannelData(0);
+  for(let i=0;i<channel.length;i++) channel[i]=(Math.random()*2-1)*0.15;
+  const noiseSource=calibCtx.createBufferSource();
+  noiseSource.buffer=buffer;
+  noiseSource.connect(calibCtx.destination);
+
+  // Wait 500ms for mic to settle, then play noise and measure
+  await new Promise(r=>setTimeout(r,500));
+  noiseSource.start();
+
+  const samples=[];
+  const measureDuration=2500; // ms
+  const measureInterval=50;
+  let elapsed=0;
+
+  await new Promise(resolve=>{
+    const iv=setInterval(()=>{
+      if(!state.autoCalibrating){clearInterval(iv);resolve();return}
+      const data=new Float32Array(analyser.fftSize);
+      analyser.getFloatTimeDomainData(data);
+      let sum=0;
+      for(let i=0;i<data.length;i++) sum+=data[i]*data[i];
+      const rms=Math.sqrt(sum/data.length);
+      if(rms>0) samples.push(20*Math.log10(rms));
+      elapsed+=measureInterval;
+      state.autoCalibProgress=Math.min(100,(elapsed/measureDuration)*100);
+      const pEl=document.getElementById('autocalib-progress');
+      if(pEl) pEl.style.width=state.autoCalibProgress+'%';
+      const pTxt=document.getElementById('autocalib-pct');
+      if(pTxt) pTxt.textContent=Math.round(state.autoCalibProgress)+'%';
+      if(elapsed>=measureDuration){clearInterval(iv);resolve()}
+    },measureInterval);
+  });
+
+  noiseSource.stop();
+  calibCtx.close();
+
+  if(samples.length>0){
+    // Remove outliers (bottom/top 10%)
+    samples.sort((a,b)=>a-b);
+    const trim=Math.floor(samples.length*0.1);
+    const trimmed=samples.slice(trim,samples.length-trim);
+    const avgRaw=trimmed.reduce((a,b)=>a+b,0)/trimmed.length;
+    state.calibrationOffset=REFERENCE_DB-avgRaw;
+    localStorage.setItem('dbguard_calibOffset',state.calibrationOffset.toString());
+  }
+
+  state.autoCalibrating=false;
+  if(!wasMonitoring) stopMonitoring();
+  render();
 }
-function resetCalibration(){state.calibrationOffset=94;state.calibrationGain=1;saveCalibration();render()}
 
 // ===== FULL RENDER (only on user actions) =====
 function render(){
@@ -321,9 +362,8 @@ function render(){
     <div class="tabs">
       <button class="tab ${state.activeTab==='monitor'?'active':''}" onclick="switchTab('monitor')">📊 Monitor</button>
       <button class="tab ${state.activeTab==='thresholds'?'active':''}" onclick="switchTab('thresholds')">⚡ Schwellenwerte</button>
-      <button class="tab ${state.activeTab==='calibrate'?'active':''}" onclick="switchTab('calibrate')">🎯 Kalibrierung</button>
     </div>
-    ${state.activeTab==='monitor'?rMonitor():state.activeTab==='thresholds'?rThresholds():rCalib()}
+    ${state.activeTab==='monitor'?rMonitor():rThresholds()}
     ${state.showModal?rModal():''}
     <div class="status-bar"><div class="status-dot ${state.monitoring?(state.triggeredIds.size>0?'alert':'active'):''}" id="status-dot"></div><span id="status-text">${state.monitoring?(state.triggeredIds.size>0?'⚠️ Schwellenwert überschritten!':'Überwachung aktiv'):'Überwachung gestoppt'}</span></div>`;
 }
@@ -333,11 +373,11 @@ function rMonitor(){
   const bars=state.barLevels.map(v=>`<div class="meter-bar-segment" style="height:${Math.max(3,(v/120)*32)}px;background:${v>0?dbColor(v):'var(--surface2)'}"></div>`).join('');
   const minis=state.thresholds.filter(t=>t.enabled).map(t=>{const tn=TONES.find(x=>x.id===t.tone)||TONES[0];return`<div class="t-mini ${state.triggeredIds.has(t.id)?'triggered':''}" id="mini-${t.id}"><div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim)"><span>${tn.icon}</span> ${t.name||''}</div><span style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:${dbColor(t.db)}">${t.db} dB</span></div>`}).join('');
   // Build history chart SVG
-  const histPts=state.historyLog.length>1?state.historyLog.map((v,i)=>{const x=(i/(600-1))*600;const y=100-Math.min(v/120,1)*100;return x.toFixed(1)+','+y.toFixed(1)}).join(' '):'';
+  const histPts=state.historyLog.length>1?state.historyLog.map((v,i)=>{const x=30+(i/(600-1))*290;const y=170-Math.min(v/120,1)*160;return x.toFixed(1)+','+y.toFixed(1)}).join(' '):'';
   const histSecs=state.historyLog.length;const histM=Math.floor(histSecs/60);const histS=histSecs%60;
   const histTime=histM+':'+(histS<10?'0':'')+histS+' / 10:00';
-  // Threshold lines in chart
-  const threshLines=state.thresholds.filter(t=>t.enabled).map(t=>{const y=100-Math.min(t.db/120,1)*100;return`<line x1="0" y1="${y.toFixed(1)}" x2="600" y2="${y.toFixed(1)}" stroke="${dbHex(t.db)}" stroke-width="0.5" stroke-dasharray="4,3" opacity="0.5"/><text x="604" y="${(y+3).toFixed(1)}" fill="${dbHex(t.db)}" font-size="7" font-family="JetBrains Mono,monospace">${t.db}</text>`}).join('');
+  // Threshold lines in chart (chart area: x 30-320, y 10-170)
+  const threshLines=state.thresholds.filter(t=>t.enabled).map(t=>{const y=170-Math.min(t.db/120,1)*160;return`<line x1="30" y1="${y.toFixed(1)}" x2="320" y2="${y.toFixed(1)}" stroke="${dbHex(t.db)}" stroke-width="0.7" stroke-dasharray="4,3" opacity="0.6"/><text x="323" y="${(y+3).toFixed(1)}" fill="${dbHex(t.db)}" font-size="8" font-family="JetBrains Mono,monospace">${t.db}</text>`}).join('');
 
   return`<div class="meter-section">
     <div class="meter-ring-container"><svg class="meter-ring" viewBox="0 0 200 200"><circle class="meter-ring-bg" cx="100" cy="100" r="90" stroke-dasharray="${C}" stroke-dashoffset="${C*0.25}"/><circle class="meter-ring-fill" cx="100" cy="100" r="90" id="ring-fill" stroke="${col}" stroke-dasharray="${C}" stroke-dashoffset="${off}"/></svg>
@@ -345,27 +385,45 @@ function rMonitor(){
     <div class="meter-bar-row" id="meter-bars">${bars}</div>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px;min-height:18px" id="peak-value">${state.monitoring?'Peak: '+state.peakDb.toFixed(1)+' dB':''}</div>
     <button class="main-btn ${state.monitoring?'stop':'start'}" onclick="${state.monitoring?'stopMonitoring()':'startMonitoring()'}">${state.monitoring?'⏹ Stoppen':'▶ Überwachung starten'}</button>
+    ${state.autoCalibrating?`
+      <div class="autocalib-status">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px">Kalibrierung läuft...</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">Lautsprecher-Lautstärke auf Maximum stellen</div>
+        <div class="autocalib-progress"><div class="autocalib-progress-fill" id="autocalib-progress" style="width:${state.autoCalibProgress}%"></div></div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:6px" id="autocalib-pct">${Math.round(state.autoCalibProgress)}%</div>
+      </div>
+    `:`
+      <button class="autocalib-btn" onclick="startAutoCalibration()">
+        <span>🎯</span>
+        <span>Auto-Kalibrierung</span>
+        ${localStorage.getItem('dbguard_calibOffset')?'<span class="autocalib-badge">kalibriert</span>':''}
+      </button>
+    `}
   </div>
   ${state.monitoring||state.historyLog.length>0?`<div class="section-title">Lautstärkenverlauf (10 Min)</div>
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 10px 10px;margin-bottom:16px">
-    <svg viewBox="0 0 620 110" style="width:100%;height:auto;display:block;overflow:visible">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px 12px 12px;margin-bottom:16px">
+    <svg viewBox="0 0 340 200" style="width:100%;height:auto;display:block;overflow:visible">
       <defs><linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--accent)" stop-opacity="0.3"/><stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
       <!-- Grid lines -->
-      <line x1="0" y1="0" x2="600" y2="0" stroke="var(--border)" stroke-width="0.5"/>
-      <line x1="0" y1="50" x2="600" y2="50" stroke="var(--border)" stroke-width="0.5"/>
-      <line x1="0" y1="100" x2="600" y2="100" stroke="var(--border)" stroke-width="0.5"/>
+      <line x1="30" y1="10" x2="320" y2="10" stroke="var(--border)" stroke-width="0.5"/>
+      <line x1="30" y1="50" x2="320" y2="50" stroke="var(--border)" stroke-width="0.3" stroke-dasharray="2,2"/>
+      <line x1="30" y1="90" x2="320" y2="90" stroke="var(--border)" stroke-width="0.3" stroke-dasharray="2,2"/>
+      <line x1="30" y1="130" x2="320" y2="130" stroke="var(--border)" stroke-width="0.3" stroke-dasharray="2,2"/>
+      <line x1="30" y1="170" x2="320" y2="170" stroke="var(--border)" stroke-width="0.5"/>
       <!-- Y-axis labels -->
-      <text x="604" y="4" fill="var(--text-dim)" font-size="7" font-family="JetBrains Mono,monospace">120</text>
-      <text x="604" y="54" fill="var(--text-dim)" font-size="7" font-family="JetBrains Mono,monospace">60</text>
-      <text x="604" y="104" fill="var(--text-dim)" font-size="7" font-family="JetBrains Mono,monospace">0</text>
+      <text x="26" y="13" fill="var(--text-dim)" font-size="9" font-family="JetBrains Mono,monospace" text-anchor="end">120</text>
+      <text x="26" y="53" fill="var(--text-dim)" font-size="9" font-family="JetBrains Mono,monospace" text-anchor="end">90</text>
+      <text x="26" y="93" fill="var(--text-dim)" font-size="9" font-family="JetBrains Mono,monospace" text-anchor="end">60</text>
+      <text x="26" y="133" fill="var(--text-dim)" font-size="9" font-family="JetBrains Mono,monospace" text-anchor="end">30</text>
+      <text x="26" y="173" fill="var(--text-dim)" font-size="9" font-family="JetBrains Mono,monospace" text-anchor="end">0</text>
       <!-- Time labels -->
-      ${[0,1,2,3,4,5,6,7,8,9,10].map(m=>`<text x="${(m/10)*600}" y="110" fill="var(--text-dim)" font-size="6" font-family="JetBrains Mono,monospace" text-anchor="middle">${m}m</text>`).join('')}
+      ${[0,2,4,6,8,10].map(m=>`<text x="${30+((m/10)*290)}" y="185" fill="var(--text-dim)" font-size="8" font-family="JetBrains Mono,monospace" text-anchor="middle">${m}m</text>`).join('')}
       <!-- Threshold lines -->
       ${threshLines}
       <!-- Data line -->
-      <polyline id="history-line" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" points="${histPts}"/>
+      <polyline id="history-line" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${histPts}"/>
     </svg>
-    <div style="text-align:center;font-size:11px;color:var(--text-dim);margin-top:6px" id="history-time-label">${histTime}</div>
+    <div style="text-align:center;font-size:13px;color:var(--text-dim);margin-top:8px;font-family:'JetBrains Mono',monospace" id="history-time-label">${histTime}</div>
   </div>`:''}
   ${minis?'<div class="section-title">Aktive Schwellenwerte</div>'+minis:''}`;
 }
@@ -374,14 +432,6 @@ function rThresholds(){
   return`<div class="section-title">Schwellenwerte verwalten</div>${state.thresholds.map(t=>{const tn=TONES.find(x=>x.id===t.tone)||TONES[0];return`<div class="threshold-card" style="opacity:${t.enabled?1:0.5}"><div class="threshold-header"><div><span class="threshold-db" style="color:${dbColor(t.db)}">${t.db} dB</span><span style="font-size:13px;color:var(--text-dim);margin-left:8px">${t.name||''}</span></div><div class="threshold-actions"><button class="icon-btn" onclick="editThreshold(${t.id})">✏️</button><button class="icon-btn" onclick="toggleThreshold(${t.id})">${t.enabled?'👁':'👁‍🗨'}</button><button class="icon-btn danger" onclick="deleteThreshold(${t.id})">🗑</button></div></div><div class="threshold-options"><div class="option-chip"><div class="dot" style="background:var(--accent)"></div>${tn.icon} ${tn.name}</div><div class="option-chip"><div class="dot" style="background:${t.vibrate?'var(--green)':'var(--text-dim)'}"></div>Vibration ${t.vibrate?'An':'Aus'}</div></div></div>`}).join('')}<button class="add-btn" onclick="addThreshold()">＋ Schwellenwert hinzufügen</button>`;
 }
 
-function rCalib(){
-  return`<div class="calib-card"><div class="calib-title">Gerät kalibrieren</div><div class="calib-desc">Nutze eine bekannte Schallquelle und ein Referenzgerät. Gib den echten dB-Wert ein und starte die Messung.</div><div class="calib-current"><span class="calib-label">Aktueller Offset</span><span class="calib-value">${state.calibrationOffset.toFixed(1)} dB</span></div>
-  <div style="margin:16px 0"><div class="calib-step"><div class="calib-step-num">1</div><div class="calib-step-text">Konstante Schallquelle erzeugen (Gespräch, Musik, etc.)</div></div><div class="calib-step"><div class="calib-step-num">2</div><div class="calib-step-text">Echten dB-Wert mit Referenzgerät messen und unten eingeben</div></div><div class="calib-step"><div class="calib-step-num">3</div><div class="calib-step-text">Kalibrierung starten — misst 5 Sekunden und berechnet Offset</div></div></div>
-  <div class="form-group"><label class="form-label">Tatsächlicher Pegel (dB SPL)</label><input class="form-input" type="number" id="calibTarget" value="${state.calibTargetDb}" onchange="state.calibTargetDb=parseInt(this.value)||70" min="30" max="120" placeholder="z.B. 70"></div>
-  ${state.calibrating?`<div class="calib-reading" id="calib-reading">${state.currentDb.toFixed(1)} dB</div><div class="calib-progress"><div class="calib-progress-fill" id="calib-progress-fill" style="width:${state.calibProgress}%"></div></div><div style="text-align:center;font-size:12px;color:var(--text-dim);margin-top:8px" id="calib-pct">Messung läuft... ${Math.round(state.calibProgress)}%</div>`:`<button class="calib-btn" style="width:100%;padding:14px" onclick="startCalibration()">🎯 Kalibrierung starten</button>`}
-  </div><div class="calib-card"><div class="calib-title">Zurücksetzen</div><div class="calib-desc">Setzt Kalibrierung auf Standardwert zurück.</div><button class="calib-btn" style="background:var(--surface2);color:var(--text-dim);width:100%;padding:12px" onclick="resetCalibration()">Auf Standard zurücksetzen</button></div>
-  <div class="calib-card"><div class="calib-title">Typische Lautstärken</div><div style="font-size:13px;color:var(--text-dim);line-height:2">🌿 30 dB — Flüstern<br>🏠 50 dB — Ruhige Wohnung<br>🗣 60 dB — Normales Gespräch<br>🚗 70 dB — Straßenverkehr<br>📢 80 dB — Lauter Verkehr<br>🏭 90 dB — Fabrik / Rasenmäher<br>🎸 100 dB — Konzert<br>🛩 110 dB — Schmerzgrenze<br>💥 120+ dB — Gehörschaden</div></div>`;
-}
 
 function rModal(){
   const t=state.editingThreshold||{id:0,db:70,tone:'beep',vibrate:true,enabled:true,name:''},isNew=t.id===0;
